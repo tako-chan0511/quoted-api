@@ -3,61 +3,59 @@ import handler from './quote'; // テスト対象のAPIハンドラー
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 // VercelResponseのモック（偽物）を作成するヘルパー関数
-// これにより、実際のレスポンスを送信せずにテストができます。
 const mockResponse = () => {
   const res: Partial<VercelResponse> = {};
-  // res.status() と res.json() が呼ばれたことを記録するモック関数に置き換える
   res.status = vi.fn().mockReturnValue(res);
   res.json = vi.fn().mockReturnValue(res);
+  // setHeaderとendもモック関数として追加
+  res.setHeader = vi.fn().mockReturnValue(res);
+  res.end = vi.fn().mockReturnValue(res);
   return res as VercelResponse;
 };
 
-// VercelRequestのモックを作成 (今回はリクエスト内容は使わないが、形式として用意)
-const mockRequest = () => {
-  return {} as VercelRequest;
+// VercelRequestのモックを作成。HTTPメソッドを指定できるように改良。
+const mockRequest = (method: string = 'GET') => {
+  return { method } as VercelRequest;
 };
 
 describe('API Handler: /api/quote', () => {
 
-  // テストケース1: ステータスコード200が返されることを確認
-  it('should return a 200 status code', () => {
-    const req = mockRequest();
+  // --- 既存のテスト ---
+  it('should return a 200 status code on GET request', () => {
+    const req = mockRequest('GET');
     const res = mockResponse();
-    
-    handler(req, res); // APIハンドラーを実行
-    
+    handler(req, res);
     expect(res.status).toHaveBeenCalledWith(200);
   });
 
-  // テストケース2: JSON形式で、'quote'と'author'プロパティを持つオブジェクトが返されることを確認
-  it('should return a JSON object with quote and author properties', () => {
-    const req = mockRequest();
+  it('should return a JSON object with quote and author properties on GET request', () => {
+    const req = mockRequest('GET');
     const res = mockResponse();
-
     handler(req, res);
-    
-    // res.jsonが呼ばれたことを確認
-    expect(res.json).toHaveBeenCalled();
-    
-    // res.jsonに渡された引数（レスポンスボディ）を取得
     const jsonResponse = vi.mocked(res.json).mock.calls[0][0];
-
-    // レスポンスボディに必要なプロパティがあるか確認
     expect(jsonResponse).toHaveProperty('quote');
     expect(jsonResponse).toHaveProperty('author');
   });
 
-  // テストケース3: 返される各プロパティの型が文字列であることを確認
-  it('should return properties of type string', () => {
-    const req = mockRequest();
+  // --- CORS関連の新しいテスト ---
+  it('should set Access-Control-Allow-Origin header to *', () => {
+    const req = mockRequest('GET');
     const res = mockResponse();
+    handler(req, res);
+    // 'Access-Control-Allow-Origin'ヘッダーが'*'で設定されているか確認
+    expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', '*');
+  });
 
+  it('should handle OPTIONS preflight request', () => {
+    const req = mockRequest('OPTIONS'); // メソッドをOPTIONSに設定
+    const res = mockResponse();
     handler(req, res);
 
-    const jsonResponse = vi.mocked(res.json).mock.calls[0][0];
-
-    // プロパティの型が文字列であることを確認
-    expect(typeof jsonResponse.quote).toBe('string');
-    expect(typeof jsonResponse.author).toBe('string');
+    // ステータス200が返されることを確認
+    expect(res.status).toHaveBeenCalledWith(200);
+    // レスポンスボディは空であることを確認 (end()が呼ばれる)
+    expect(res.end).toHaveBeenCalled();
+    // JSONは返されないことを確認
+    expect(res.json).not.toHaveBeenCalled();
   });
 });

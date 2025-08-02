@@ -1,10 +1,5 @@
-// Vercelのサーバーレス関数で使われるRequestとResponseの型をインポートします。
-// これにより、TypeScriptが引数の型を正しく認識できるようになります。
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// このファイルは /api/quote というAPIエンドポイントになります。
-
-// 返却する名言のリスト。APIの内部にデータを直接保持します。
 const quotes = [
   {
     quote: 'The only way to do great work is to love what you do.',
@@ -32,16 +27,28 @@ const quotes = [
   }
 ];
 
-// Vercelなどの環境でAPIリクエストを処理するためのハンドラー関数
-// 引数に型(VercelRequest, VercelResponse)を指定することで、型エラーを解消します。
 export default function handler(
   request: VercelRequest,
   response: VercelResponse,
 ) {
-  // quotes配列からランダムに1つの名言を選択
+  // --- CORS設定 ここから ---
+  // すべてのドメインからのアクセスを許可する
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  // 許可するHTTPメソッド
+  response.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  // 許可するHTTPヘッダー
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // OPTIONSメソッドへの対応（プリフライトリクエスト）
+  // 本格的なリクエストの前に、ブラウザが「このリクエストを送って大丈夫？」と確認に来るためのものです。
+  if (request.method === 'OPTIONS') {
+    return response.status(200).end();
+  }
+  // --- CORS設定 ここまで ---
+
+  // --- 元のAPIロジック ---
   const randomIndex = Math.floor(Math.random() * quotes.length);
   const randomQuote = quotes[randomIndex];
 
-  // 200 OKステータスと共に、選択した名言をJSON形式で返す
-  response.status(200).json(randomQuote);
+  return response.status(200).json(randomQuote);
 }
